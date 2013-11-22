@@ -3,7 +3,8 @@
 angular.module('refermeApp', [
   'ngCookies',
   'ngResource',
-  'ngSanitize'
+  'ngSanitize',
+  'ngDragDrop'
 ])
   .config(function ($routeProvider) {
     $routeProvider
