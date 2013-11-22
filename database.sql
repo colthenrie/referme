@@ -11,7 +11,7 @@ CREATE TABLE contact (
 	contact_state        varchar(50)    ,
 	contact_postal_code  varchar(10)    ,
 	contact_country      varchar(50)    ,
-	contact_linkedin_id  int NOT NULL   ,
+	contact_linkedin_id  varbinary(100) NOT NULL   ,
 	CONSTRAINT Pk_Contacts PRIMARY KEY ( contact_id ),
 	CONSTRAINT Uk_LinkedIn_ID UNIQUE ( contact_linkedin_id ) 
  );
@@ -90,6 +90,79 @@ RETURN
     LEFT JOIN referral ON referral.referral_job_id=job.job_id
     INNER JOIN users ON users.users_id=job.job_user_id
     WHERE JobUserID = @UserID;;
+
+CREATE PROCEDURE AddReferral
+	@Referrer int,
+	@Referral int,
+	@Job int
+AS
+    MERGE INTO referral
+    USING
+        (SELECT @Referrer AS ReferrerID, @Referral AS ReferralID, @Job as JobID) AS SRC
+            ON (referral.referral_user_id = SRC.ReferrerID AND referral.referral_contact_id = SRC.ReferralID AND referral.referral_job_id = SRC.jobID)
+    WHEN MATCHED THEN
+        UPDATE SET referral_user_id=@Referrer, referral_contact_id=@Referral, referral_job_id=@Job
+    WHEN NOT MATCHED THEN
+        INSERT (referral_user_id, referral_contact_id, referral_job_id)
+            VALUES (@Referrer, @Referral, @Job);;
+
+CREATE PROCEDURE DropReferral
+	@Referrer int,
+	@Referral int,
+	@Job int
+AS
+    DELETE FROM referral
+        WHERE referral.referral_user_id = @Referrer
+        AND referral.referral_contact_id = @Referral
+        AND referral.referral_job_id = @Job;
+
+CREATE PROCEDURE UpdateContact
+    @LinkedInID varchar(100),
+    @FirstName varchar(100),
+    @MiddleName varchar(100),
+    @LastName varchar(100),
+    @Email varchar(100),
+    @Phone varchar(20),
+    @Address1 varchar(100) = '',
+    @Address2 varchar(100) = '',
+    @City varchar(50) = '',
+    @State varchar(50) = '',
+    @PostalCode varchar(10) = '',
+    @Country varchar(50) = 'United States'
+AS
+    MERGE INTO contact
+    USING
+        (SELECT @LinkedInID AS LinkedInID) AS SRC
+            ON (contact.contact_linkedin_id = SRC.LinkedInID)
+    WHEN MATCHED THEN
+        UPDATE SET contact_fname = @FirstName,
+        contact_mname = @MiddleName,
+        contact_lname = @LastName,
+        contact_email = @Email,
+        contact_phone = @Phone,
+        contact_street_address1 = @Address1,
+        contact_street_address2 = @Address2,
+        contact_city = @City,
+        contact_state = @State,
+        contact_postal_code = @PostalCode,
+        contact_country = @Country
+    WHEN NOT MATCHED THEN
+        INSERT (contact_fname, contact_mname, contact_lname, contact_email, contact_phone, contact_street_address1, contact_street_address2, contact_city, contact_state, contact_postal_code, contact_country)
+            VALUES (@FirstName, @MiddleName, @LastName, @Email, @Phone, @Address1, @Address2, @City, @State, @PostalCode, @Country);;
+
+CREATE PROCEDURE UpdateUserContacts
+    @ContactID int,
+    @UserID int
+AS
+    MERGE INTO user_contacts
+    USING
+        (SELECT @ContactID AS ContactID, @UserID AS UserID) AS SRC
+            ON (user_contacts.user_contact_contact_id = SRC.ContactID AND user_contacts.user_contact_user_id = SRC.UserID)
+    WHEN MATCHED THEN
+        UPDATE SET user_contact_contact_id=@ContactID, user_contacts_user_id=@UserID
+    WHEN NOT MATCHED THEN
+        INSERT (user_contacts_contact_id, user_contacts_user_id)
+            VALUES (@ContactID, @UserID);;
 
 ALTER TABLE job ADD CONSTRAINT fk_job_users FOREIGN KEY ( job_user_id ) REFERENCES users( users_id ) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
