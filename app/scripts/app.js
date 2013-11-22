@@ -19,6 +19,10 @@ angular.module('refermeApp', [
         templateUrl: 'views/postJob.html',
         controller: 'PostjobCtrl'
       })
+      .when('/profile', {
+        templateUrl: 'views/profile.html',
+        controller: 'ProfileCtrl'
+      })
       .otherwise({
         redirectTo: '/'
       });
