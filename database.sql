@@ -20,7 +20,7 @@ CREATE TABLE users (
 	users_id             int NOT NULL   IDENTITY,
 	users_name           varchar(100) NOT NULL   ,
 	users_contact_id     int NOT NULL   ,
-	users_linkedin_oauth nvarchar(200) NOT NULL   ,
+	users_linkedin_oauth varchar(200) NOT NULL   ,
 	CONSTRAINT Pk_user PRIMARY KEY ( users_id )
  );
 
@@ -82,10 +82,12 @@ RETURN
     FROM contact
     WHERE contact.contact_id IN (SELECT user_contacts_contact_id FROM user_contacts WHERE user_contacts_user_id = @UserID);
 
-CREATE FUNCTION GetUserJobs (@UserID int)
-RETURNS TABLE
-RETURN
-    SELECT job.job_id AS JobID,
+CREATE FUNCTION GetUserJobs (@UserID int, @MyPostings int = 1)
+RETURNS @results TABLE (JobID int, Company varchar(100), Title varchar(150), URL text, UserID int, DateAdded datetime, DateClosed datetime, ReferredApplicant varchar(200), Referrer varchar(200))
+AS BEGIN
+IF @MyPostings = 1
+BEGIN
+    INSERT @results (JobID, Company, Title, URL, UserID, DateAdded, DateClosed, ReferredApplicant, Referrer) SELECT job.job_id AS JobID,
         job.job_company AS Company,
         job.job_title AS Title,
         job.job_url AS URL,
@@ -98,7 +100,50 @@ RETURN
     LEFT JOIN referral ON referral.referral_job_id=job.job_id
     INNER JOIN users ON users.users_id=job.job_user_id
     WHERE job.job_user_id = @UserID
-    AND (job.job_date_closed > GetDate() OR job.job_date_closed IS NULL);
+    AND (job.job_date_closed > GetDate() OR job.job_date_closed IS NULL)
+END
+ELSE
+BEGIN
+    INSERT @results (JobID, Company, Title, URL, UserID, DateAdded, DateClosed, ReferredApplicant, Referrer) SELECT job.job_id AS JobID,
+        job.job_company AS Company,
+        job.job_title AS Title,
+        job.job_url AS URL,
+        job.job_user_id AS UserID,
+        job.job_date_added AS DateAdded,
+        job.job_date_closed AS DateClosed,
+        dbo.GetNameForContact(referral.referral_contact_id) AS ReferredApplicant,
+        dbo.GetNameForContact(users.users_contact_id) AS Referrer
+    FROM job
+    LEFT JOIN referral ON referral.referral_job_id=job.job_id
+    INNER JOIN users ON users.users_id=job.job_user_id
+    WHERE job.job_user_id IN (SELECT users_id FROM users WHERE users_contact_id IN (SELECT user_contacts_contact_id FROM user_contacts WHERE user_contacts_user_id = @UserID))
+    AND (job.job_date_closed > GetDate() OR job.job_date_closed IS NULL)
+END
+RETURN
+END;
+
+CREATE FUNCTION UserLogin (@LinkedInOAuth varchar(200), @LinkedInID varchar(100))
+RETURNS bit
+BEGIN
+    DECLARE @UserID int;
+    DECLARE @ContactID int;
+    DECLARE @FirstName varchar(100);
+    DECLARE @LastName varchar(100);
+    SELECT @UserID = users.users_id FROM users WHERE users_linkedin_oauth = @LinkedInOAuth;
+    IF(@@ROWCOUNT = 0)
+    BEGIN
+        SELECT @ContactID = contact.contact_id, @FirstName = contact.contact_fname, @LastName = contact.contact_lname FROM contact WHERE contact_linkedin_id = @LinkedInID;
+        IF(@@ROWCOUNT = 0) 
+            RETURN 0;
+        ELSE
+        BEGIN
+			DECLARE @Username varchar(100) = CONCAT(@FirstName, @LastName, @LinkedInID);
+            EXEC dbo.UpdateUser @Username, @ContactID, @LinkedInOAuth; 
+            RETURN 1;
+        END
+    END
+    RETURN 1;
+END;
 
 CREATE PROCEDURE AddReferral
 	@Referrer int,
@@ -176,6 +221,24 @@ AS
     WHEN NOT MATCHED THEN
         INSERT (job_company, job_title, job_url, job_user_id, job_date_added)
             VALUES (@Company, @Title, @URL, @JobPoster, GetDate());;
+
+CREATE PROCEDURE UpdateUser
+    @Username varchar(100),
+    @ContactID int,
+    @LinkedInOAuth varchar(200),
+    @UserID int = NULL
+AS
+        MERGE INTO users
+        USING
+            (SELECT @UserID AS UserID) AS SRC
+                ON (users.users_id = SRC.UserID)
+        WHEN MATCHED THEN
+            UPDATE SET users_name = @Username,
+            users_contact_id = @ContactID,
+            users_linkedin_oauth = @LinkedInOAuth
+        WHEN NOT MATCHED THEN
+            INSERT (users_name, users_contact_id, users_linkedin_oauth)
+                VALUES (@Username, @ContactID, @LinkedInOAuth);;
 
 CREATE PROCEDURE UpdateUserContacts
     @ContactID int,
