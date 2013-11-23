@@ -3,7 +3,8 @@
 angular.module('refermeApp', [
   'ngCookies',
   'ngResource',
-  'ngSanitize'
+  'ngSanitize',
+  'ngDragDrop'
 ])
   .config(function ($routeProvider) {
     $routeProvider
@@ -22,6 +23,10 @@ angular.module('refermeApp', [
       .when('/profile', {
         templateUrl: 'views/profile.html',
         controller: 'ProfileCtrl'
+      })
+      .when('/login', {
+        templateUrl: 'views/login.html',
+        controller: 'LoginCtrl'
       })
       .otherwise({
         redirectTo: '/'

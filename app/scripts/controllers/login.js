@@ -1,6 +1,7 @@
 'use strict';
 
-angular.module('refermeApp', function ($scope, $location, $rootScope, $http) {
+angular.module('refermeApp')
+  .controller('LoginCtrl', function ($scope, $location, $rootScope, $http) {
         $scope.getLinkedInData = function() {
                 if(!$scope.hasOwnProperty("userprofile")){
                         IN.API.Profile("me").fields(
@@ -27,14 +28,4 @@ angular.module('refermeApp', function ($scope, $location, $rootScope, $http) {
                 $rootScope.loggedUser = false;
                 $location.path("/login");
         };
-
-        function($scope) {
-  $scope.list1 = [
-    {name: 'AngularJS', reject: true},
-    {name: 'Is'},
-    {name: 'teh'},
-    {name: '@wesome'}
-  ];
-  
-  $scope.list2 = [];
 });
