@@ -1,19 +1,17 @@
 CREATE TABLE contact ( 
 	contact_id           int NOT NULL   IDENTITY,
 	contact_fname        varchar(100) NOT NULL   ,
-	contact_mname        varchar(100)    ,
 	contact_lname        varchar(100) NOT NULL   ,
+	contact_job_title    varchar(150) NOT NULL   ,
 	contact_email        varchar(100)    ,
 	contact_phone        varchar(20)    ,
-	contact_street_address1 varchar(100)    ,
-	contact_street_address2 varchar(100)    ,
 	contact_city         varchar(50)    ,
 	contact_state        varchar(50)    ,
-	contact_postal_code  varchar(10)    ,
-	contact_country      varchar(50)    ,
-	contact_linkedin_id  varbinary(100) NOT NULL   ,
+	contact_linkedin_id  varchar(100) NOT NULL   ,
+	contact_linkedin_url varchar(200)    ,
 	CONSTRAINT Pk_Contacts PRIMARY KEY ( contact_id ),
-	CONSTRAINT Uk_LinkedIn_ID UNIQUE ( contact_linkedin_id ) 
+	CONSTRAINT Uk_LinkedIn_ID UNIQUE ( contact_linkedin_id ) ,
+	CONSTRAINT Uk_LinkedIn_URL UNIQUE ( contact_linkedin_url ) 
  );
 
 ALTER TABLE contact ADD CONSTRAINT Ck_email_phone CHECK ( contact_phone IS NOT NULL OR contact_email IS NOT NULL );
@@ -28,8 +26,9 @@ CREATE TABLE users (
 
 CREATE TABLE job ( 
 	job_id               int NOT NULL   IDENTITY,
+	job_company          varchar(100) NOT NULL   ,
 	job_title            varchar(150) NOT NULL   ,
-	job_description      text NOT NULL   ,
+	job_url              text NOT NULL   ,
 	job_user_id          int NOT NULL   ,
 	job_date_added       datetime  CONSTRAINT defo_job_date_added DEFAULT getdate()  ,
 	job_date_closed      datetime    ,
@@ -47,9 +46,15 @@ CREATE TABLE referral (
 	CONSTRAINT Pk_referral PRIMARY KEY ( referral_id )
  );
 
+CREATE INDEX idx_referral ON referral ( referral_contact_id );
+
+CREATE INDEX idx_referral_0 ON referral ( referral_job_id );
+
+CREATE INDEX idx_referral_1 ON referral ( referral_user_id );
+
 CREATE TABLE user_contacts ( 
 	user_contacts_id     int NOT NULL   IDENTITY,
-	user_conacts_user_id int NOT NULL   ,
+	user_contacts_user_id int NOT NULL   ,
 	user_contacts_contact_id int NOT NULL   ,
 	CONSTRAINT Pk_user_contacts PRIMARY KEY ( user_contacts_id )
  );
@@ -68,28 +73,32 @@ CREATE FUNCTION GetUserContacts (@UserID int)
 RETURNS TABLE
 RETURN
     SELECT GetNameForContact(contact.contact_id) AS ContactName,
+        contact.contact_job_title AS JobTitle,
         contact.contact_city AS City,
         contact.contact_state AS State,
         contact.contact_id AS ContactID,
-        contact.contact_linkedin_id AS LinkedInID
+        contact.contact_linkedin_id AS LinkedInID,
+        contact.contact_linkedin_url AS LinkedInURL
     FROM contact
-    WHERE ContactID IN (SELECT user_contacts_contact_id FROM user_contacts WHERE user_contacts_user_id = @UserID);
+    WHERE contact.contact_id IN (SELECT user_contacts_contact_id FROM user_contacts WHERE user_contacts_user_id = @UserID);
 
 CREATE FUNCTION GetUserJobs (@UserID int)
 RETURNS TABLE
 RETURN
     SELECT job.job_id AS JobID,
+        job.job_company AS Company,
         job.job_title AS Title,
-        job.job_description AS Description,
+        job.job_url AS URL,
         job.job_user_id AS UserID,
         job.job_date_added AS DateAdded,
         job.job_date_closed AS DateClosed,
-        GetNameForContact(referral.contact_id) AS ReferredApplicant,
-        GetNameForContact(users.users_contact_id) AS Referrer
+        dbo.GetNameForContact(referral.referral_contact_id) AS ReferredApplicant,
+        dbo.GetNameForContact(users.users_contact_id) AS Referrer
     FROM job
     LEFT JOIN referral ON referral.referral_job_id=job.job_id
     INNER JOIN users ON users.users_id=job.job_user_id
-    WHERE JobUserID = @UserID;;
+    WHERE job.job_user_id = @UserID
+    AND (job.job_date_closed > GetDate() OR job.job_date_closed IS NULL);
 
 CREATE PROCEDURE AddReferral
 	@Referrer int,
@@ -106,6 +115,12 @@ AS
         INSERT (referral_user_id, referral_contact_id, referral_job_id)
             VALUES (@Referrer, @Referral, @Job);;
 
+CREATE PROCEDURE CloseJobListing
+    @JobID int
+AS
+    UPDATE job SET job_date_closed = GetDate()
+    WHERE job_id = @JobID;;
+
 CREATE PROCEDURE DropReferral
 	@Referrer int,
 	@Referral int,
@@ -118,17 +133,13 @@ AS
 
 CREATE PROCEDURE UpdateContact
     @LinkedInID varchar(100),
+    @LinkedInURL varchar(200),
     @FirstName varchar(100),
-    @MiddleName varchar(100),
     @LastName varchar(100),
-    @Email varchar(100),
-    @Phone varchar(20),
-    @Address1 varchar(100) = '',
-    @Address2 varchar(100) = '',
+    @Email varchar(100) = '',
+    @Phone varchar(20) = '',
     @City varchar(50) = '',
-    @State varchar(50) = '',
-    @PostalCode varchar(10) = '',
-    @Country varchar(50) = 'United States'
+    @State varchar(50) = ''
 AS
     MERGE INTO contact
     USING
@@ -136,19 +147,35 @@ AS
             ON (contact.contact_linkedin_id = SRC.LinkedInID)
     WHEN MATCHED THEN
         UPDATE SET contact_fname = @FirstName,
-        contact_mname = @MiddleName,
         contact_lname = @LastName,
         contact_email = @Email,
         contact_phone = @Phone,
-        contact_street_address1 = @Address1,
-        contact_street_address2 = @Address2,
-        contact_city = @City,
+        contact_city = @City,  
         contact_state = @State,
-        contact_postal_code = @PostalCode,
-        contact_country = @Country
+        contact_linkedin_url = @LinkedInURL
     WHEN NOT MATCHED THEN
-        INSERT (contact_fname, contact_mname, contact_lname, contact_email, contact_phone, contact_street_address1, contact_street_address2, contact_city, contact_state, contact_postal_code, contact_country)
-            VALUES (@FirstName, @MiddleName, @LastName, @Email, @Phone, @Address1, @Address2, @City, @State, @PostalCode, @Country);;
+        INSERT (contact_fname, contact_lname, contact_email, contact_phone, contact_city, contact_state, contact_linkedin_url)
+            VALUES (@FirstName, @LastName, @Email, @Phone, @City, @State, @LinkedInURL);;
+
+CREATE PROCEDURE UpdateJobListing
+    @Company varchar(100),
+    @Title varchar(150),
+    @URL text,
+    @JobPoster int,
+    @JobID int = NULL
+AS
+    MERGE INTO job
+    USING
+        (SELECT @JobID AS JobID) AS SRC
+            ON (job.job_id = SRC.JobID)
+    WHEN MATCHED THEN
+        UPDATE SET job_company = @Company,
+        job_title = @Title,
+        job_url = @URL,
+        job_user_id = @JobPoster
+    WHEN NOT MATCHED THEN
+        INSERT (job_company, job_title, job_url, job_user_id, job_date_added)
+            VALUES (@Company, @Title, @URL, @JobPoster, GetDate());;
 
 CREATE PROCEDURE UpdateUserContacts
     @ContactID int,
@@ -157,20 +184,20 @@ AS
     MERGE INTO user_contacts
     USING
         (SELECT @ContactID AS ContactID, @UserID AS UserID) AS SRC
-            ON (user_contacts.user_contact_contact_id = SRC.ContactID AND user_contacts.user_contact_user_id = SRC.UserID)
+            ON (user_contacts.user_contacts_contact_id = SRC.ContactID AND user_contacts.user_contacts_user_id = SRC.UserID)
     WHEN MATCHED THEN
-        UPDATE SET user_contact_contact_id=@ContactID, user_contacts_user_id=@UserID
+        UPDATE SET user_contacts_contact_id=@ContactID, user_contacts_user_id=@UserID
     WHEN NOT MATCHED THEN
         INSERT (user_contacts_contact_id, user_contacts_user_id)
             VALUES (@ContactID, @UserID);;
 
 ALTER TABLE job ADD CONSTRAINT fk_job_users FOREIGN KEY ( job_user_id ) REFERENCES users( users_id ) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
-ALTER TABLE referral ADD CONSTRAINT fk_referral_user_id FOREIGN KEY ( referral_id ) REFERENCES users( users_id ) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE referral ADD CONSTRAINT fk_referral_contact FOREIGN KEY ( referral_contact_id ) REFERENCES contact( contact_id ) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE referral ADD CONSTRAINT fk_referral_contact_id FOREIGN KEY ( referral_id ) REFERENCES contact( contact_id ) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE referral ADD CONSTRAINT fk_referral_job FOREIGN KEY ( referral_job_id ) REFERENCES job( job_id ) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE referral ADD CONSTRAINT fk_referral_job FOREIGN KEY ( referral_id ) REFERENCES job( job_id ) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE referral ADD CONSTRAINT fk_referral_users FOREIGN KEY ( referral_user_id ) REFERENCES users( users_id ) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 ALTER TABLE user_contacts ADD CONSTRAINT fk_user_contacts_user FOREIGN KEY ( user_contacts_id ) REFERENCES users( users_id ) ON DELETE CASCADE ON UPDATE CASCADE;
 
