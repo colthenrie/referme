@@ -12,14 +12,20 @@
     <!-- Place favicon.ico and apple-touch-icon.png in the root directory -->
 
         <!-- build:css(.tmp) styles/main.css -->
-        <link rel="stylesheet" href="styles/main.css">
-        <link rel="stylesheet" href="styles/bootstrap.css">
-        <link rel="stylesheet" href="bower_components/jquery-ui/themes/base/jquery-ui.css">
-        <!-- endbuild -->
-        <!-- Drag Drop Tutorial -->
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/bootstrap.css">
+     <link rel="stylesheet" href="bower_components/jquery-ui/themes/base/jquery-ui.css">
+    <!-- endbuild -->
+        <!-- Linked In -->
+    
+    <script type="text/javascript" src="http://platform.linkedin.com/in.js">
+      api_key: 77hd9qja8c6oz2
+      onLoad: onLinkedInLoad
+      authorize: true
+    </script>
         
 </head>
-  <body ng-app="refermeApp">
+  <body ng-app="refermeApp" id='refermeBody' ng-controller="LoginCtrl">
     <!--[if lt IE 7]>
       <p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.</p>
     <![endif]-->
@@ -80,6 +86,8 @@
         <script src="scripts/controllers/profile.js"></script>
         <script src="scripts/directives/draggable.js"></script>
         <script src="scripts/directives/droppable.js"></script>
+        <script src="scripts/controllers/login.js"></script>
+        <script src="scripts/linkedin.js"></script>
         <!-- endbuild -->
 </body>
 </html>
