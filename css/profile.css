@@ -60,6 +60,7 @@ header .logo {
 .right {
 	width: 500px;
 	float: right;
+	text-align: left;
 }
 
 .profile-pic {
